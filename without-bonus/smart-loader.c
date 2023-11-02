@@ -4,11 +4,6 @@
 
 #define PAGE_SIZE 4096
 
-typedef struct SegmentInfo{
-    Elf32_Addr fault_address;
-    size_t size;
-}SegmentInfo;
-
 Elf32_Ehdr *ehdr;
 Elf32_Phdr *phdr;
 int fd, entrypoint = -1;
