@@ -4,21 +4,21 @@
 
 #define PAGE_SIZE 4096
 
-typedef struct segment_address{
+typedef struct SegmentInfo{
     Elf32_Addr fault_address;
     size_t size;
-}segment_address;
+}SegmentInfo;
 
 Elf32_Ehdr *ehdr;
 Elf32_Phdr *phdr;
 int fd, entrypoint = -1;
 int page_faults = 0, page_allocations = 0, total_fragmentation = 0, segment = 0, fault_index = 0;
-segment_address seg_addr[100];
-void *virtual_mem;
+SegmentInfo seg_info[100];
+void *page_allocated;
 
 int find_segment(void* addr){
     for (int i=0; i<fault_index; i++){
-        if (seg_addr[i].fault_address <= (uintptr_t) addr && (uintptr_t) addr <= seg_addr[i].fault_address + seg_addr[i].size){
+        if (seg_info[i].fault_address <= (uintptr_t) addr && (uintptr_t) addr <= seg_info[i].fault_address + seg_info[i].size){
             return i;
         }
     }
@@ -39,16 +39,16 @@ void sigsegv_handler(int signum, siginfo_t *info, void *context) {
     int fault_segment_index = find_segment(fault_addr);
     // printf("Faulty segment: %d\n", fault_segment_index);
     if (fault_segment_index!=-1){
-        int fault_pages = seg_addr[fault_segment_index].size/PAGE_SIZE;
-        if (fault_pages * PAGE_SIZE != seg_addr[fault_segment_index].size){
+        int fault_pages = seg_info[fault_segment_index].size/PAGE_SIZE;
+        if (fault_pages * PAGE_SIZE != seg_info[fault_segment_index].size){
             fault_pages++;
         }
         total_fragmentation += PAGE_SIZE * fault_pages - phdr[segment].p_memsz;
     }
     for (int i=0; i<ehdr->e_phnum; i++){
         if (phdr[i].p_vaddr <= (uintptr_t) fault_addr && (uintptr_t) fault_addr <= phdr[i].p_vaddr + phdr[i].p_memsz){
-            seg_addr[fault_index].fault_address = phdr[i].p_vaddr;
-            seg_addr[fault_index].size = phdr[i].p_memsz;
+            seg_info[fault_index].fault_address = phdr[i].p_vaddr;
+            seg_info[fault_index].size = phdr[i].p_memsz;
         }
     }
     fault_index++;
@@ -62,10 +62,10 @@ void sigsegv_handler(int signum, siginfo_t *info, void *context) {
         flags |= MAP_ANONYMOUS;
     }
 
-    virtual_mem = mmap((void *)phdr[segment].p_vaddr, PAGE_SIZE * pages,
+    page_allocated = mmap((void *)phdr[segment].p_vaddr, PAGE_SIZE * pages,
                       PROT_READ | PROT_WRITE | PROT_EXEC, flags, fd, phdr[segment].p_offset);
 
-    if (virtual_mem == MAP_FAILED) {
+    if (page_allocated == MAP_FAILED) {
         perror("mmap");
         exit(1);
     }
@@ -104,6 +104,7 @@ void load_and_run_elf(char **exe) {
 void loader_cleanup() {
     free(ehdr);
     free(phdr);
+
 }
 
 int main(int argc, char **argv) {
