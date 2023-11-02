@@ -4,24 +4,58 @@
 
 #define PAGE_SIZE 4096
 
+typedef struct segment_address{
+    Elf32_Addr fault_address;
+    size_t size;
+}segment_address;
+
 Elf32_Ehdr *ehdr;
 Elf32_Phdr *phdr;
 int fd, entrypoint = -1;
-int page_faults = 0, page_allocations = 0, total_fragmentation = 0;
+int page_faults = 0, page_allocations = 0, total_fragmentation = 0, segment = 0, fault_index = 0;
+segment_address seg_addr[100];
 void *virtual_mem;
 
-int segment = 0;
+int find_segment(void* addr){
+    for (int i=0; i<fault_index; i++){
+        if (seg_addr[i].fault_address <= (uintptr_t) addr && (uintptr_t) addr <= seg_addr[i].fault_address + seg_addr[i].size){
+            return i;
+        }
+    }
+    return -1;
+}
+
 void sigsegv_handler(int signum, siginfo_t *info, void *context) {
     page_faults++;
+    void* fault_addr = info->si_addr;
 
-    void *fault_addr = info->si_addr;
+    // printf("Fault address: %p\n", fault_addr);
     int pages = (phdr[segment].p_memsz) / PAGE_SIZE;
     if (phdr[segment].p_memsz % PAGE_SIZE != 0) {
         pages++;
     }
-
     page_allocations += pages;
-    total_fragmentation += pages * PAGE_SIZE - phdr[segment].p_memsz;
+    
+    int fault_segment_index = find_segment(fault_addr);
+    // printf("Faulty segment: %d\n", fault_segment_index);
+    if (fault_segment_index!=-1){
+        int fault_pages = seg_addr[fault_segment_index].size/PAGE_SIZE;
+        if (fault_pages * PAGE_SIZE != seg_addr[fault_segment_index].size){
+            fault_pages++;
+        }
+        total_fragmentation += PAGE_SIZE * fault_pages - phdr[segment].p_memsz;
+    }
+    for (int i=0; i<ehdr->e_phnum; i++){
+        if (phdr[i].p_vaddr <= (uintptr_t) fault_addr && (uintptr_t) fault_addr <= phdr[i].p_vaddr + phdr[i].p_memsz){
+            seg_addr[fault_index].fault_address = phdr[i].p_vaddr;
+            seg_addr[fault_index].size = phdr[i].p_memsz;
+        }
+    }
+    fault_index++;
+
+    // printf("Segment size: %d\n", phdr[segment].p_memsz);
+    // printf("Segment address: %p\n", phdr[segment].p_vaddr);
+    // printf("Internal Fragmentation: %d\n", pages*PAGE_SIZE - phdr[segment].p_memsz);
 
     int flags = MAP_PRIVATE | MAP_FIXED;
     if (segment != entrypoint) {
@@ -33,7 +67,7 @@ void sigsegv_handler(int signum, siginfo_t *info, void *context) {
 
     if (virtual_mem == MAP_FAILED) {
         perror("mmap");
-        exit(4);
+        exit(1);
     }
     segment++;
 }
@@ -64,7 +98,7 @@ void load_and_run_elf(char **exe) {
     printf("User _start return value = %d\n", result);
     printf("Total page faults: %d\n", page_faults);
     printf("Pages Allocated: %d\n", page_allocations);
-    printf("Total fragmentation (in KB): %0.4f KB\n", total_fragmentation / (double)PAGE_SIZE);
+    printf("Total fragmentation (in KB): %0.4fKB\n", total_fragmentation/(double) 1024);
 }
 
 void loader_cleanup() {
