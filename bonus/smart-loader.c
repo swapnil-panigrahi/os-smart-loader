@@ -19,6 +19,7 @@ void *page_allocated;
 void sigsegv_handler(int signum, siginfo_t *info, void *context) {
     page_faults++;
     uintptr_t* fault_addr = info->si_addr;
+    // calculating segment in which page fault occurred
     int i = 0;
     while(i < ehdr->e_phnum) {
         Elf32_Addr seg_start = phdr[i].p_vaddr;
@@ -28,8 +29,39 @@ void sigsegv_handler(int signum, siginfo_t *info, void *context) {
         }
         i++;
     }
+    // calculating address where page is needed to be inserted
     int fault_seg_index = i;
     Elf32_Addr seg_page_addr = phdr[fault_seg_index].p_vaddr;
+    while(seg_page_addr < fault_addr){
+        seg_page_addr = (void*) ((uintptr_t) seg_page_addr + PAGE_SIZE)
+    }
+    seg_page_addr = (void*) ((uintptr_t) seg_page_addr - PAGE_SIZE);
+    // debugging start
+    // printf("Fault address: %p\n", fault_addr);
+    // printf("Faulty segment index: %d\n", fault_seg_index);
+    // printf("Faulty page: %d\n", seg_page_addr);
+    //printf("Faulty segment start: %p\n", phdr[fault_seg_index].p_vaddr);
+    //printf("Faulty segment end: %p\n", phdr[fault_seg_index].p_vaddr + phdr[fault_seg_index].p_memsz);
+    // debugging end
+    // calculating fragmentation
+    uintptr_t overshoot = (uintptr_t) seg_page_addr + PAGE_SIZE;
+    if(overshoot > (uintptr_t) phdr[fault_seg_index].p_vaddr + phdr[fault_seg_index].p_memsz)
+        overshoot -= (uintptr_t) phdr[fault_seg_index].p_vaddr + phdr[fault_seg_index].p_memsz;
+    else overshoot = 0;
+    total_fragmentation += overshoot;
+    // setting flags for mmap
+    int flags = MAP_PRIVATE | MAP_FIXED;
+    if (fault_seg_index != entrypoint) {
+        flags |= MAP_ANONYMOUS;
+    }
+    // allocating the page to resolve the page fault
+    page_allocated = mmap((void*)seg_page_addr, PAGE_SIZE,
+                          PROT_READ | PROT_WRITE | PROT_EXEC, flags, fd, 0);
+    // if map fails
+    if (page_allocated == MAP_FAILED) {
+        perror("mmap");
+        exit(1);
+    }
 }
 
 void load_and_run_elf(char **exe) {
