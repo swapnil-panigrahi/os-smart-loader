@@ -15,7 +15,6 @@ void sigsegv_handler(int signum, siginfo_t *info, void *context) {
     page_faults++;
     page_allocations++;
     void* fault_addr = info->si_addr;
-    printf("Fault address: %u\n", fault_addr);
     // calculating segment in which page fault occurred
     int i = 0;
     while(i < ehdr->e_phnum) {
@@ -27,7 +26,6 @@ void sigsegv_handler(int signum, siginfo_t *info, void *context) {
         i++;
     }
     if(i >= ehdr->e_phnum){ printf("fault address not in segments.");exit(1);}
-    printf("i:%d\n",i);
     // calculating address where page is needed to be inserted
     int fault_seg_index = i;
     int page_index = 0;
@@ -63,10 +61,11 @@ void sigsegv_handler(int signum, siginfo_t *info, void *context) {
         exit(1);
     }
     // debugging start
-    printf("Faulty segment index: %d\n", fault_seg_index);
-    printf("Faulty page: %u\n", seg_page_addr);
-    printf("Faulty segment start: %u\n", phdr[fault_seg_index].p_vaddr);
-    printf("Faulty segment end: %u\n", phdr[fault_seg_index].p_vaddr + phdr[fault_seg_index].p_memsz);
+//    printf("Fault address: %u\n", fault_addr);
+//    printf("Faulty segment index: %d\n", fault_seg_index);
+//    printf("Faulty page: %u\n", seg_page_addr);
+//    printf("Faulty segment start: %u\n", phdr[fault_seg_index].p_vaddr);
+//    printf("Faulty segment end: %u\n", phdr[fault_seg_index].p_vaddr + phdr[fault_seg_index].p_memsz);
     // debugging end
 }
 
