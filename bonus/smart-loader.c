@@ -11,6 +11,8 @@ int page_faults = 0, page_allocations = 0;
 size_t total_fragmentation = 0;
 
 void *page_allocated;
+void *address[50];
+int address_index = 0;
 
 void sigsegv_handler(int signum, siginfo_t *info, void *context) {
     page_faults++;
@@ -48,6 +50,7 @@ void sigsegv_handler(int signum, siginfo_t *info, void *context) {
         perror("mmap");
         exit(1);
     }
+    address[address_index++] = page_allocated;
 
     if (lseek(fd, phdr[fault_seg_index].p_offset + page_index * PAGE_SIZE, SEEK_SET) == -1) {
         perror("lseek");
@@ -64,6 +67,12 @@ void sigsegv_handler(int signum, siginfo_t *info, void *context) {
     }
 }
 
+void mmap_cleanup(){
+    // unmapping the mapped pages
+    for (int i = 0; i < address_index; i++) {
+        munmap(address[i], PAGE_SIZE);
+    }
+}
 void load_and_run_elf(char **exe) {
     fd = open(exe[1], O_RDONLY);
     if (fd == -1) {
@@ -96,6 +105,7 @@ void load_and_run_elf(char **exe) {
 void loader_cleanup() {
     free(ehdr);
     free(phdr);
+    mmap_cleanup();
 }
 
 int main(int argc, char **argv) {
