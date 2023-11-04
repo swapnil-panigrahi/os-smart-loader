@@ -10,21 +10,15 @@ int fd, entrypoint = -1;
 int page_faults = 0, page_allocations = 0, total_fragmentation = 0, segment = 0;
 void *page_allocated;
 
-
 void sigsegv_handler(int signum, siginfo_t *info, void *context) {
     page_faults++;
-    void* fault_addr = info->si_addr;
+    void *fault_addr = info->si_addr;
 
-    // printf("Fault address: %p\n", fault_addr);
-    int pages = (phdr[segment].p_memsz) / PAGE_SIZE;
-    if (phdr[segment].p_memsz % PAGE_SIZE != 0) {
-        pages++;
-    }
+    int pages = (phdr[segment].p_memsz + PAGE_SIZE - 1) / PAGE_SIZE;
     page_allocations += pages;
-    
-    // printf("Faulty segment: %d\n", fault_segment_index);
-    if ((uintptr_t)fault_addr >= phdr[segment].p_vaddr && (uintptr_t)fault_addr <= phdr[segment].p_vaddr + phdr[segment].p_memsz){
-        total_fragmentation += PAGE_SIZE * pages - phdr[segment].p_memsz;
+
+    if ((uintptr_t)fault_addr >= phdr[segment].p_vaddr && (uintptr_t)fault_addr <= phdr[segment].p_vaddr + phdr[segment].p_memsz) {
+        total_fragmentation += (pages * PAGE_SIZE) - phdr[segment].p_memsz;
     }
 
     int flags = MAP_PRIVATE | MAP_FIXED;
@@ -40,6 +34,12 @@ void sigsegv_handler(int signum, siginfo_t *info, void *context) {
         exit(1);
     }
     segment++;
+}
+
+void cleanup_pages() {
+    for (int i = 0; i < segment; i++) {
+        munmap((void *)phdr[i].p_vaddr, PAGE_SIZE * ((phdr[i].p_memsz + PAGE_SIZE - 1) / PAGE_SIZE));
+    }
 }
 
 void load_and_run_elf(char **exe) {
@@ -68,13 +68,11 @@ void load_and_run_elf(char **exe) {
     printf("User _start return value = %d\n", result);
     printf("Total page faults: %d\n", page_faults);
     printf("Pages Allocated: %d\n", page_allocations);
-    printf("Total fragmentation (in KB): %0.4fKB\n", total_fragmentation/(double) 1024);
-}
+    printf("Total fragmentation (in KB): %0.4fKB\n", total_fragmentation / 1024.0);
 
-void loader_cleanup() {
+    cleanup_pages();
     free(ehdr);
     free(phdr);
-
 }
 
 int main(int argc, char **argv) {
@@ -87,6 +85,5 @@ int main(int argc, char **argv) {
     }
 
     load_and_run_elf(argv);
-    loader_cleanup();
     return 0;
 }
