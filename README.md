@@ -21,7 +21,7 @@
 - After all the necessary info has been calculated a page is allocated to the page's virtual address using mmap.
 - For some reason if mmap fails the program is exited and the error is printed.
 ## Contributions
-- implementing smart-loader where the memory allocation is done of an entire segment whenever a page fault occurs (Working) - Swapnil Panighari.
-- implementing smart-loader where the memory allocation is done page wise (Working) - Rohak Kansal.
+- Implementing smart-loader where the memory allocation is done of an entire segment whenever a page fault occurs (Working), Code Cleanup and Munmap - Swapnil Panighari.
+- Implementing smart-loader where the memory allocation is done page wise (Working) and Makefile - Rohak Kansal.
 ## GitHub Repository
 - https://github.com/swapnil-panigrahi/os-smart-loader
