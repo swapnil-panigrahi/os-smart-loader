@@ -74,7 +74,7 @@ void mmap_cleanup(){
     }
 }
 void load_and_run_elf(char **exe) {
-    fd = open(exe[1], O_RDONLY);
+    fd = open(exe[0], O_RDONLY);
     if (fd == -1) {
         perror("Couldn't open file");
         exit(1);
@@ -116,8 +116,20 @@ int main(int argc, char **argv) {
         perror("sigaction");
         exit(1);
     }
-
-    load_and_run_elf(argv);
+    // 1. carry out necessary checks on the input ELF file
+    Elf32_Ehdr elf32Ehdr;
+    FILE* elf_file = fopen(argv[1], "rb");
+    if(elf_file!=NULL){
+        fread(&elf32Ehdr, sizeof(elf32Ehdr), 1, elf_file);
+        if (memcmp(elf32Ehdr.e_ident, ELFMAG, SELFMAG) != 0) {printf("This is an invalid elf file\n"); exit(1);}
+        fclose(elf_file);
+    }
+    else{
+        perror("Error:");
+    }
+    // 2. passing it to the loader for carrying out the loading/execution
+    load_and_run_elf(&argv[1]);
+    
     loader_cleanup();
     return 0;
 }
